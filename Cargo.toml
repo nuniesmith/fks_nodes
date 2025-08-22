@@ -16,6 +16,4 @@ tracing-subscriber = { workspace = true }
 reqwest = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
-
-[dependencies]
 shared-rust = { path = "shared/rust" }
