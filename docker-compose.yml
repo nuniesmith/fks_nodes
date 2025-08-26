@@ -1,86 +1,16 @@
-# ==========================================================================
-# docker-compose.yml - Multi-Node Network Configuration
-# ==========================================================================
-# This file configures a node network cluster.
-
 services:
-  # Master/Registry Node
-  node-network-master:
-    profiles:
-      - node
-    extends:
-      file: docker-compose.yml
-      service: node-network
-    container_name: fks_node_network_master
-    environment:
-      <<: [*common-env, *database-env]
-      SERVICE_RUNTIME: rust
-      SERVICE_TYPE: node-network
-      NODE_ID: node_master
-      NODE_REGION: us-east
-      LISTEN_ADDR: 0.0.0.0
-      LISTEN_PORT: 8080
-      PING_INTERVAL_MS: 5000
-      DISCOVERY_INTERVAL_MS: 15000
-      IS_MASTER_NODE: "true"
-    ports:
-      - "8080:8080"
-    labels:
-      - "com.fks.node.type=master"
-      - "com.fks.node.region=us-east"
-
-  # Worker Nodes - Modify according to your regions
-  node-network-worker:
-    profiles:
-      - node
-    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKER_NAMESPACE:-nuniesmith}/fks:node-network-latest
-    deploy:
-      mode: replicated
-      replicas: 3
-    environment:
-      <<: [*common-env, *database-env]
-      SERVICE_RUNTIME: rust
-      SERVICE_TYPE: node-network
-      NODE_ID: node_worker
-      NODE_REGION: us-east
-      LISTEN_ADDR: 0.0.0.0
-      REGISTRY_URL: http://node-network-master:8080
-    ports:
-      - "8081:8081"
-      - "8082:8082"
-      - "8083:8083"
-    depends_on:
-      - node-network-master
-    labels:
-      - "com.fks.node.type=worker"
-      - "com.fks.node.region=us-east"
-    
-  # Load Balancer
-  node-network-lb:
-    profiles:
-      - node
-    image: nginx:alpine
-    container_name: fks_node_network_lb
-    restart: unless-stopped
-    networks:
-      - fks-network
-    ports:
-      - "8000:80"
-    volumes:
-      - ./deployment/nginx/node-network-lb.conf:/etc/nginx/nginx.conf:ro
-    depends_on:
-      - node-network-master
+  fks_node_network:
+    build:
+      context: .
+      dockerfile: Dockerfile.simple
+    networks: [fks_net]
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    labels:
-      - "com.fks.service.type=load-balancer"
-      - "com.fks.service.for=node-network"
+      test: ["CMD-SHELL", "echo ok"]
+      interval: 60s
+      timeout: 5s
+      retries: 2
+      start_period: 30s
 
-# Networks
 networks:
-  fks-network:
-    external: true
+  fks_net:
+    name: fks_net

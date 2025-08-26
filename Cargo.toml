@@ -1,5 +1,5 @@
 [package]
-name = "fks-node-network"
+name = "fks_node-network"
 version = "0.1.0"
 edition = "2021"
 description = "Master/worker async node network for external API proxying & coordination."
@@ -16,4 +16,4 @@ tracing-subscriber = { workspace = true }
 reqwest = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
-shared-rust = { path = "shared/rust" }
+shared_rust = { path = "shared/rust" }
