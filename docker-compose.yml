@@ -2,7 +2,7 @@ services:
   fks_node_network:
     build:
       context: .
-      dockerfile: Dockerfile.simple
+      dockerfile: Dockerfile
     networks: [fks_net]
     healthcheck:
       test: ["CMD-SHELL", "echo ok"]
