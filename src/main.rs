@@ -1,6 +1,8 @@
 use clap::{Parser, ValueEnum};
 use std::{time::Duration, net::SocketAddr};
 use tokio::{net::TcpListener, io::{AsyncReadExt, AsyncWriteExt}, time::sleep};
+use axum::{Router, routing::get, response::Json as AxumJson};
+use serde_json::json;
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
 enum NodeType { Master, Worker }
@@ -24,15 +26,31 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_master(cli: &Cli) -> anyhow::Result<()> {
+    // Split provided listen into HTTP and raw TCP (reuse same for simplicity)
     let addr: SocketAddr = cli.listen.parse()?;
-    let listener = TcpListener::bind(addr).await?;
-    tracing::info!(?addr, "master listening");
+    let tcp_listener = TcpListener::bind(addr).await?;
+    tracing::info!(?addr, "master listening (tcp + http)");
+
+    // HTTP health router
+    let http_router = Router::new().route("/health", get(|| async { AxumJson(json!({
+        "status": "healthy",
+        "service": "fks_nodes_master",
+        "timestamp": chrono::Utc::now()
+    }))}));
+
+    // Spawn HTTP server on same addr+1 port (if available)
+    let http_port = addr.port()+1;
+    let http_addr = SocketAddr::from((addr.ip(), http_port));
+    let http_listener = TcpListener::bind(http_addr).await?;
+    tracing::info!(%http_addr, "http health listening");
+    tokio::spawn(async move { if let Err(e)=axum::serve(http_listener, http_router).await { tracing::error!(error=?e, "http server error"); } });
+
     loop {
-        let (mut socket, peer) = listener.accept().await?;
+        let (mut socket, peer) = tcp_listener.accept().await?;
         tracing::info!(?peer, "connection");
         tokio::spawn(async move {
             let mut buf = vec![0u8; 1024];
-            match socket.read(&mut buf).await { Ok(n) if n>0 => { let _=socket.write_all(b"ok\n").await; }, _=>{} }
+            if let Ok(n) = socket.read(&mut buf).await { if n>0 { let _=socket.write_all(b"ok\n").await; } }
         });
     }
 }
