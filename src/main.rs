@@ -31,28 +31,22 @@ async fn run_master(cli: &Cli) -> anyhow::Result<()> {
     let tcp_listener = TcpListener::bind(addr).await?;
     tracing::info!(?addr, "master listening (tcp + http)");
 
-    // HTTP health router
-    let http_router = Router::new().route("/health", get(|| async { AxumJson(json!({
-        "status": "healthy",
-        "service": "fks_nodes_master",
-        "timestamp": chrono::Utc::now()
-    }))}));
+    // HTTP health router (serve on same port via axum + upgrade path for raw TCP kept separate) - simplify: HTTP only
+    let http_router = Router::new()
+        .route("/health", get(|| async { AxumJson(json!({
+            "status": "healthy",
+            "service": "fks_nodes_master",
+            "timestamp": chrono::Utc::now()
+        }))}))
+        .route("/", get(|| async { AxumJson(json!({"ok": true})) }));
 
-    // Spawn HTTP server on same addr+1 port (if available)
-    let http_port = addr.port()+1;
-    let http_addr = SocketAddr::from((addr.ip(), http_port));
-    let http_listener = TcpListener::bind(http_addr).await?;
-    tracing::info!(%http_addr, "http health listening");
+    // Replace previous dual TCP+HTTP approach with single HTTP server (multi-protocol complicates compose health checks)
+    // If raw TCP functionality is needed, we can add a dedicated port later.
+    let http_listener = TcpListener::bind(addr).await?; // reusing original addr
+    tracing::info!(%addr, "http (with /health) listening");
     tokio::spawn(async move { if let Err(e)=axum::serve(http_listener, http_router).await { tracing::error!(error=?e, "http server error"); } });
-
-    loop {
-        let (mut socket, peer) = tcp_listener.accept().await?;
-        tracing::info!(?peer, "connection");
-        tokio::spawn(async move {
-            let mut buf = vec![0u8; 1024];
-            if let Ok(n) = socket.read(&mut buf).await { if n>0 { let _=socket.write_all(b"ok\n").await; } }
-        });
-    }
+    // Keep process alive
+    loop { sleep(Duration::from_secs(3600)).await; }
 }
 
 async fn run_worker(cli: &Cli) -> anyhow::Result<()> {
