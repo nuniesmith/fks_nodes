@@ -2,7 +2,7 @@ services:
   fks_nodes:
     build:
       context: .
-      dockerfile: shared/shared_docker/templates/Dockerfile.rust
+      dockerfile: shared/docker/templates/Dockerfile.rust
       args:
         SERVICE_NAME: fks_nodes
         SERVICE_TYPE: nodes
