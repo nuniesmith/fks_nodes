@@ -1,6 +1,6 @@
 use clap::{Parser, ValueEnum};
 use std::{time::Duration, net::SocketAddr};
-use tokio::{net::TcpListener, io::{AsyncReadExt, AsyncWriteExt}, time::sleep};
+use tokio::{net::TcpListener, io::{AsyncWriteExt}, time::sleep};
 use axum::{Router, routing::get, response::Json as AxumJson};
 use serde_json::json;
 
@@ -26,12 +26,10 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_master(cli: &Cli) -> anyhow::Result<()> {
-    // Split provided listen into HTTP and raw TCP (reuse same for simplicity)
+    // Currently only an HTTP server is started on the provided address.
     let addr: SocketAddr = cli.listen.parse()?;
-    let tcp_listener = TcpListener::bind(addr).await?;
-    tracing::info!(?addr, "master listening (tcp + http)");
 
-    // HTTP health router (serve on same port via axum + upgrade path for raw TCP kept separate) - simplify: HTTP only
+    // HTTP health router (serve on same port via axum)
     let http_router = Router::new()
         .route("/health", get(|| async { AxumJson(json!({
             "status": "healthy",
@@ -72,6 +70,7 @@ async fn run_worker(cli: &Cli) -> anyhow::Result<()> {
 mod tests {
     use super::*;
     use tokio::task::JoinSet;
+    use tokio::io::AsyncReadExt;
 
     #[tokio::test]
     async fn master_accepts_single_connection() {
